@@ -1,0 +1,12 @@
+# Binaries
+/out/
+/rumbles
+*.exe
+
+# Test / coverage output
+*.test
+*.out
+coverage.txt
+
+# Local env
+.env
