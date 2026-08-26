@@ -28,9 +28,14 @@ phases:
 
   pre_build:
     commands:
-      # Read the digest handed over from the build stage's image.json artifact.
-      - DIGEST=$(yq -r '.digest' image.json)
-      - TAG=$(yq -r '.tag' image.json)
+      # image.json comes from the Build stage's output artifact (secondary input).
+      # CodePipeline exposes secondary artifacts at $CODEBUILD_SRC_DIR_<name>.
+      # The primary source (this repo, with the buildspec) is the working dir.
+      - IMAGE_JSON="${CODEBUILD_SRC_DIR_BuildOutput}/image.json"
+      - echo "Reading digest from $IMAGE_JSON"
+      - cat "$IMAGE_JSON"
+      - DIGEST=$(yq -r '.digest' "$IMAGE_JSON")
+      - TAG=$(yq -r '.tag' "$IMAGE_JSON")
       - echo "Promoting digest $DIGEST (tag $TAG) to DEV"
       - test -n "$DIGEST" # fail fast if the digest is empty
 

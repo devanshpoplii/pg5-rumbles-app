@@ -66,9 +66,11 @@
               "version": "1"
             },
             "configuration": {
-              "ProjectName": "rumbles-deploy-dev"
+              "ProjectName": "rumbles-deploy-dev",
+              "PrimarySource": "SourceOutput"
             },
             "inputArtifacts": [
+              { "name": "SourceOutput" },
               { "name": "BuildOutput" }
             ]
           }
