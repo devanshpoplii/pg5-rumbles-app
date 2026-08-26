@@ -1,0 +1,55 @@
+version: 0.2
+
+# Stage 2 of the pipeline: BUILD ONCE.
+# Builds the rumbles image, pushes it to ECR, and captures the immutable digest.
+# The digest is written to an output artifact (image.json) so the later
+# per-environment deploy/promote stages reuse the EXACT same image — never rebuilt.
+
+env:
+  variables:
+    # ECR repo URL (account.dkr.ecr.region.amazonaws.com/repo). Also set as a
+    # CodeBuild project env var so it can be overridden without editing this file.
+    ECR_REPO: "849445096948.dkr.ecr.eu-north-1.amazonaws.com/rumbles"
+    AWS_REGION: "eu-north-1"
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      # Get a short-lived ECR auth token and log Docker in. No stored credentials.
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO"
+      # Derive an immutable, human-readable tag from the git commit SHA.
+      # CODEBUILD_RESOLVED_SOURCE_VERSION is the full commit SHA of the source.
+      - IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:0:12}"
+      - echo "Building image tag $IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Building the image..."
+      # Bake the version into the binary (matches the app's -ldflags VERSION).
+      - docker build --build-arg VERSION="$IMAGE_TAG" -t "$ECR_REPO:$IMAGE_TAG" .
+
+  post_build:
+    commands:
+      - echo "Pushing image to ECR..."
+      - docker push "$ECR_REPO:$IMAGE_TAG"
+      # Resolve the IMMUTABLE digest of what we just pushed. This is the source
+      # of truth for promotion — never the mutable tag.
+      - DIGEST=$(aws ecr describe-images --region "$AWS_REGION" --repository-name rumbles --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+      - echo "Pushed digest $DIGEST"
+      # Write the digest (and repo/tag for reference) to an output artifact so
+      # the deploy-dev and promote-qa stages can read the exact image reference.
+      - |
+        cat > image.json <<EOF
+        {
+          "repository": "$ECR_REPO",
+          "tag": "$IMAGE_TAG",
+          "digest": "$DIGEST"
+        }
+        EOF
+      - cat image.json
+
+artifacts:
+  # image.json is passed forward to the next pipeline stages.
+  files:
+    - image.json
