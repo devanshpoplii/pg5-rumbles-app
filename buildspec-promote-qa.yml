@@ -63,22 +63,16 @@ phases:
         Digest: $DIGEST
         Promote the dev-verified image to QA. Opened as a PR (QA is gated)."
       - git push -u origin "$PR_BRANCH"
-
-  post_build:
-    commands:
-      - cd gitops
-      # Obtain a token from the credential helper to call the GitHub API.
-      # The helper (backed by the CodeConnection) vends a usable token for github.com.
+      # Open the PR in the SAME phase (still inside ./gitops). A `cd` does not
+      # persist across phases in CodeBuild, so all git work stays in `build`.
+      # Obtain a token from the credential helper (backed by the CodeConnection)
+      # to authenticate the GitHub REST API call.
       - |
         TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill | sed -n 's/^password=//p')
-      - |
         if [ -z "$TOKEN" ]; then
           echo "ERROR: could not obtain a GitHub token from the credential helper."
           exit 1
         fi
-      # Open the PR via the GitHub REST API.
-      - |
-        PR_BRANCH="promote-qa/${TAG}"
         HTTP=$(curl -sS -o pr_resp.json -w "%{http_code}" \
           -X POST \
           -H "Accept: application/vnd.github+json" \
@@ -87,9 +81,12 @@ phases:
           -d "{\"title\":\"promote(qa): rumbles ${TAG}\",\"head\":\"${PR_BRANCH}\",\"base\":\"${BASE_BRANCH}\",\"body\":\"Automated QA promotion.\\n\\nDigest: ${DIGEST}\\nTag: ${TAG}\\n\\nMerging this PR promotes the dev-verified image to QA (production).\"}")
         echo "GitHub API HTTP status: $HTTP"
         cat pr_resp.json
-        if [ "$HTTP" != "201" ]; then
+        if [ "$HTTP" = "422" ]; then
+          echo "PR already exists for branch $PR_BRANCH (422) — treating as OK."
+        elif [ "$HTTP" != "201" ]; then
           echo "ERROR: failed to open PR (expected 201)."
           exit 1
+        else
+          PR_URL=$(yq -r '.html_url' pr_resp.json)
+          echo "Opened QA promotion PR: $PR_URL"
         fi
-        PR_URL=$(yq -r '.html_url' pr_resp.json)
-        echo "Opened QA promotion PR: $PR_URL"
