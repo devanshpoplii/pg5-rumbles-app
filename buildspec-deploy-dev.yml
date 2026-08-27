@@ -6,17 +6,18 @@ version: 0.2
 # dev = direct commit for fast feedback (the researched dev-vs-prod pattern).
 # Argo CD (dev app, auto-sync) then deploys the new digest to the dev spoke.
 
+# Let CodeBuild inject the CodeConnection credentials into all git operations.
+# This requires the connection to be attached to the project as a source
+# credential (secondary source with the connection auth). No tokens in the file.
 env:
+  git-credential-helper: yes
   variables:
-    # Repo without scheme; the scheme + token are added at clone time.
-    GITOPS_REPO_PATH: "github.com/devanshpoplii/pg5-rumbles-gitops.git"
+    GITOPS_REPO: "https://github.com/devanshpoplii/pg5-rumbles-gitops.git"
     GITOPS_BRANCH: "main"
     VALUES_PATH: "envs/dev/values.yaml"
     # Commit identity for the automated commit.
     GIT_AUTHOR_NAME: "rumbles-pipeline"
     GIT_AUTHOR_EMAIL: "rumbles-pipeline@users.noreply.github.com"
-    # The CodeConnection ARN used to obtain a short-lived git token.
-    CONNECTION_ARN: "arn:aws:codeconnections:eu-north-1:849445096948:connection/8ebd7410-40aa-4b51-ab27-001af959fa3c"
 
 phases:
   install:
@@ -41,13 +42,8 @@ phases:
 
   build:
     commands:
-      - echo "Fetching short-lived git token from the CodeConnection..."
-      # Ask the connection for a temporary git access token (no stored secrets).
-      - TOKEN=$(aws codeconnections get-connection-token --connection-arn "$CONNECTION_ARN" --query 'Token' --output text)
-      # Build an authenticated clone URL. The token is used only in-memory here.
-      - AUTH_URL="https://codeconnections:${TOKEN}@${GITOPS_REPO_PATH}"
-      - echo "Cloning gitops repo..."
-      - git clone --branch "$GITOPS_BRANCH" "$AUTH_URL" gitops
+      - echo "Cloning gitops repo (git-credential-helper injects connection creds)..."
+      - git clone --branch "$GITOPS_BRANCH" "$GITOPS_REPO" gitops
       - cd gitops
       # Update the image digest (and readable tag) in the dev values file.
       - yq -i ".image.digest = \"$DIGEST\"" "$VALUES_PATH"
@@ -70,7 +66,7 @@ phases:
 
         Digest: $DIGEST
         Promoted automatically by the rumbles build pipeline."
-          # origin already carries the token from the clone URL above.
+          # git-credential-helper injects the CodeConnection creds for the push.
           git push origin "$GITOPS_BRANCH"
           echo "Committed and pushed dev promotion."
         fi

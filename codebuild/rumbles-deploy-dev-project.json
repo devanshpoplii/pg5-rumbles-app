@@ -5,6 +5,17 @@
     "type": "CODEPIPELINE",
     "buildspec": "buildspec-deploy-dev.yml"
   },
+  "secondarySources": [
+    {
+      "type": "GITHUB",
+      "location": "https://github.com/devanshpoplii/pg5-rumbles-gitops.git",
+      "sourceIdentifier": "gitops",
+      "auth": {
+        "type": "CODECONNECTIONS",
+        "resource": "arn:aws:codeconnections:eu-north-1:849445096948:connection/8ebd7410-40aa-4b51-ab27-001af959fa3c"
+      }
+    }
+  ],
   "artifacts": {
     "type": "CODEPIPELINE"
   },
