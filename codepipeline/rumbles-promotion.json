@@ -75,6 +75,23 @@
             ]
           }
         ]
+      },
+      {
+        "name": "ApproveQA",
+        "actions": [
+          {
+            "name": "ManualApproval",
+            "actionTypeId": {
+              "category": "Approval",
+              "owner": "AWS",
+              "provider": "Manual",
+              "version": "1"
+            },
+            "configuration": {
+              "CustomData": "Approve promotion of this digest from dev to qa (production). Verify the dev deployment is healthy before approving."
+            }
+          }
+        ]
       }
     ]
   }
