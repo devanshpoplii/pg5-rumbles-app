@@ -42,6 +42,8 @@ phases:
 
   build:
     commands:
+      # Fail the whole phase on any error (so a failed push does NOT report success).
+      - set -e
       # All git work happens in ONE phase. CodeBuild starts each phase in a fresh
       # shell at the source root, so a `cd` in an earlier phase does NOT persist —
       # doing clone + edit + commit + push together keeps the directory context.
@@ -67,6 +69,7 @@ phases:
         Digest: $DIGEST
         Promoted automatically by the rumbles build pipeline."
           # git-credential-helper injects the CodeConnection creds for the push.
+          # With set -e, a push failure aborts the phase (no false success).
           git push origin "$GITOPS_BRANCH"
-          echo "Committed and pushed dev promotion."
+          echo "Successfully committed and pushed dev promotion."
         fi
