@@ -20,6 +20,14 @@
         "codeconnections:UseConnection"
       ],
       "Resource": "arn:aws:codeconnections:eu-north-1:849445096948:connection/e70e301f-1be6-4f3f-aec8-ba30216004ab"
+    },
+    {
+      "Sid": "ReadGitHubPatForPR",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:eu-north-1:849445096948:secret:rumbles/github-pat-*"
     }
   ]
 }

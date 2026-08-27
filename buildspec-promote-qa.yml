@@ -65,12 +65,16 @@ phases:
       - git push -u origin "$PR_BRANCH"
       # Open the PR in the SAME phase (still inside ./gitops). A `cd` does not
       # persist across phases in CodeBuild, so all git work stays in `build`.
-      # Obtain a token from the credential helper (backed by the CodeConnection)
-      # to authenticate the GitHub REST API call.
+      # The credential helper vends creds to git (push above) but will NOT expose
+      # a token for API use, so the PR API call uses a fine-grained GitHub PAT
+      # stored in Secrets Manager (Pull requests: write on the gitops repo).
       - |
-        TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill | sed -n 's/^password=//p')
-        if [ -z "$TOKEN" ]; then
-          echo "ERROR: could not obtain a GitHub token from the credential helper."
+        TOKEN=$(aws secretsmanager get-secret-value \
+          --secret-id rumbles/github-pat \
+          --region eu-north-1 \
+          --query SecretString --output text | yq -r '.token')
+        if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+          echo "ERROR: could not read GitHub PAT from Secrets Manager."
           exit 1
         fi
         HTTP=$(curl -sS -o pr_resp.json -w "%{http_code}" \
