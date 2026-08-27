@@ -42,7 +42,11 @@ phases:
 
   build:
     commands:
+      # All git work happens in ONE phase. CodeBuild starts each phase in a fresh
+      # shell at the source root, so a `cd` in an earlier phase does NOT persist —
+      # doing clone + edit + commit + push together keeps the directory context.
       - echo "Cloning gitops repo (git-credential-helper injects connection creds)..."
+      - rm -rf gitops
       - git clone --branch "$GITOPS_BRANCH" "$GITOPS_REPO" gitops
       - cd gitops
       # Update the image digest (and readable tag) in the dev values file.
@@ -50,14 +54,10 @@ phases:
       - yq -i ".image.tag = \"$TAG\"" "$VALUES_PATH"
       - echo "Updated $VALUES_PATH:"
       - yq '.image' "$VALUES_PATH"
-
-  post_build:
-    commands:
-      - cd gitops
+      # Commit and push (still inside ./gitops in this same phase/shell).
       - git config user.name "$GIT_AUTHOR_NAME"
       - git config user.email "$GIT_AUTHOR_EMAIL"
       - git add "$VALUES_PATH"
-      # If nothing changed (same digest), don't fail the build — just skip.
       - |
         if git diff --cached --quiet; then
           echo "No change in $VALUES_PATH; skipping commit."
