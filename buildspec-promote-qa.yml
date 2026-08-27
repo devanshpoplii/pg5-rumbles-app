@@ -1,0 +1,95 @@
+version: 0.2
+
+# Stage 5 of the pipeline: PROMOTE TO QA (via Pull Request).
+# Reads the SAME digest the build stage produced (image.json) — build once,
+# promote the same artifact — and opens a PULL REQUEST that sets it in
+# envs/qa/values.yaml. QA = production, so promotion is gated by PR review/merge,
+# NOT a direct commit. Merging the PR is what actually promotes to QA.
+
+env:
+  git-credential-helper: yes
+  variables:
+    GITOPS_REPO: "https://github.com/devanshpoplii/pg5-rumbles-gitops.git"
+    GITOPS_OWNER_REPO: "devanshpoplii/pg5-rumbles-gitops"
+    BASE_BRANCH: "main"
+    VALUES_PATH: "envs/qa/values.yaml"
+    GIT_AUTHOR_NAME: "rumbles-pipeline"
+    GIT_AUTHOR_EMAIL: "rumbles-pipeline@users.noreply.github.com"
+
+phases:
+  install:
+    commands:
+      - echo "Installing yq..."
+      - wget -q https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64 -O /usr/local/bin/yq
+      - chmod +x /usr/local/bin/yq
+
+  pre_build:
+    commands:
+      # Same digest the build stage produced (from BuildOutput artifact).
+      - IMAGE_JSON="${CODEBUILD_SRC_DIR_BuildOutput}/image.json"
+      - echo "Reading digest from $IMAGE_JSON"
+      - cat "$IMAGE_JSON"
+      - DIGEST=$(yq -r '.digest' "$IMAGE_JSON")
+      - TAG=$(yq -r '.tag' "$IMAGE_JSON")
+      - echo "Promoting digest $DIGEST (tag $TAG) to QA via PR"
+      - test -n "$DIGEST"
+
+  build:
+    commands:
+      - set -e
+      - echo "Cloning gitops repo..."
+      - rm -rf gitops
+      - git clone --branch "$BASE_BRANCH" "$GITOPS_REPO" gitops
+      - cd gitops
+      # Create a unique promotion branch (per tag) so repeated runs don't collide.
+      - PR_BRANCH="promote-qa/${TAG}"
+      - git checkout -b "$PR_BRANCH"
+      # Set the SAME digest into the QA values file.
+      - yq -i ".image.digest = \"$DIGEST\"" "$VALUES_PATH"
+      - yq -i ".image.tag = \"$TAG\"" "$VALUES_PATH"
+      - echo "Updated $VALUES_PATH:"
+      - yq '.image' "$VALUES_PATH"
+      - git config user.name "$GIT_AUTHOR_NAME"
+      - git config user.email "$GIT_AUTHOR_EMAIL"
+      - git add "$VALUES_PATH"
+      - |
+        if git diff --cached --quiet; then
+          echo "QA already at digest $DIGEST; nothing to promote. Skipping PR."
+          exit 0
+        fi
+      - |
+        git commit -m "promote(qa): rumbles $TAG
+
+        Digest: $DIGEST
+        Promote the dev-verified image to QA. Opened as a PR (QA is gated)."
+      - git push -u origin "$PR_BRANCH"
+
+  post_build:
+    commands:
+      - cd gitops
+      # Obtain a token from the credential helper to call the GitHub API.
+      # The helper (backed by the CodeConnection) vends a usable token for github.com.
+      - |
+        TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill | sed -n 's/^password=//p')
+      - |
+        if [ -z "$TOKEN" ]; then
+          echo "ERROR: could not obtain a GitHub token from the credential helper."
+          exit 1
+        fi
+      # Open the PR via the GitHub REST API.
+      - |
+        PR_BRANCH="promote-qa/${TAG}"
+        HTTP=$(curl -sS -o pr_resp.json -w "%{http_code}" \
+          -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${TOKEN}" \
+          "https://api.github.com/repos/${GITOPS_OWNER_REPO}/pulls" \
+          -d "{\"title\":\"promote(qa): rumbles ${TAG}\",\"head\":\"${PR_BRANCH}\",\"base\":\"${BASE_BRANCH}\",\"body\":\"Automated QA promotion.\\n\\nDigest: ${DIGEST}\\nTag: ${TAG}\\n\\nMerging this PR promotes the dev-verified image to QA (production).\"}")
+        echo "GitHub API HTTP status: $HTTP"
+        cat pr_resp.json
+        if [ "$HTTP" != "201" ]; then
+          echo "ERROR: failed to open PR (expected 201)."
+          exit 1
+        fi
+        PR_URL=$(yq -r '.html_url' pr_resp.json)
+        echo "Opened QA promotion PR: $PR_URL"

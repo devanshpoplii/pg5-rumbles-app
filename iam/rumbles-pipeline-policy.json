@@ -24,7 +24,8 @@
       ],
       "Resource": [
         "arn:aws:codebuild:eu-north-1:849445096948:project/rumbles-build",
-        "arn:aws:codebuild:eu-north-1:849445096948:project/rumbles-deploy-dev"
+        "arn:aws:codebuild:eu-north-1:849445096948:project/rumbles-deploy-dev",
+        "arn:aws:codebuild:eu-north-1:849445096948:project/rumbles-promote-qa"
       ]
     },
     {

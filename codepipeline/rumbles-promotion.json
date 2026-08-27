@@ -92,6 +92,28 @@
             }
           }
         ]
+      },
+      {
+        "name": "PromoteQA",
+        "actions": [
+          {
+            "name": "OpenQAPromotionPR",
+            "actionTypeId": {
+              "category": "Build",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "configuration": {
+              "ProjectName": "rumbles-promote-qa",
+              "PrimarySource": "SourceOutput"
+            },
+            "inputArtifacts": [
+              { "name": "SourceOutput" },
+              { "name": "BuildOutput" }
+            ]
+          }
+        ]
       }
     ]
   }
