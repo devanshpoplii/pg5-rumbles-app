@@ -63,13 +63,18 @@ phases:
       - |
         if git diff --cached --quiet; then
           echo "No change in $VALUES_PATH; skipping commit."
-        else
-          git commit -m "deploy(dev): promote rumbles to $TAG
+          exit 0
+        fi
+        git commit -m "deploy(dev): promote rumbles to $TAG
 
         Digest: $DIGEST
         Promoted automatically by the rumbles build pipeline."
-          # git-credential-helper injects the CodeConnection creds for the push.
-          # With set -e, a push failure aborts the phase (no false success).
-          git push origin "$GITOPS_BRANCH"
+        # git-credential-helper injects the CodeConnection creds for the push.
+        # Explicitly check the push result so a 403/denied FAILS the build
+        # instead of silently reporting success.
+        if git push origin "$GITOPS_BRANCH"; then
           echo "Successfully committed and pushed dev promotion."
+        else
+          echo "ERROR: git push failed (see error above)."
+          exit 1
         fi

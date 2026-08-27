@@ -19,7 +19,7 @@
         "codeconnections:GetConnection",
         "codeconnections:UseConnection"
       ],
-      "Resource": "arn:aws:codeconnections:eu-north-1:849445096948:connection/8ebd7410-40aa-4b51-ab27-001af959fa3c"
+      "Resource": "arn:aws:codeconnections:eu-north-1:849445096948:connection/e70e301f-1be6-4f3f-aec8-ba30216004ab"
     }
   ]
 }
