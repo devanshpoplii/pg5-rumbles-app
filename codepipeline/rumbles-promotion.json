@@ -23,7 +23,8 @@
               "ConnectionArn": "arn:aws:codeconnections:eu-north-1:849445096948:connection/e70e301f-1be6-4f3f-aec8-ba30216004ab",
               "FullRepositoryId": "devanshpoplii/pg5-rumbles-app",
               "BranchName": "main",
-              "OutputArtifactFormat": "CODE_ZIP"
+              "OutputArtifactFormat": "CODE_ZIP",
+              "DetectChanges": "true"
             },
             "outputArtifacts": [
               { "name": "SourceOutput" }
@@ -114,6 +115,21 @@
             ]
           }
         ]
+      }
+    ],
+    "triggers": [
+      {
+        "providerType": "CodeStarSourceConnection",
+        "gitConfiguration": {
+          "sourceActionName": "AppSource",
+          "push": [
+            {
+              "branches": {
+                "includes": ["main"]
+              }
+            }
+          ]
+        }
       }
     ]
   }
