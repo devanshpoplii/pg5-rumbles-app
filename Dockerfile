@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-# Pinned by digest in production builds; tag shown here for readability.
-FROM golang:1.22 AS build
+# Run the compiler on the NATIVE build arch (BUILDPLATFORM) so it never runs
+# under cross-arch emulation, then cross-compile to the target arch via GOARCH.
+# This avoids the QEMU pointer-packing crash (fatal error: lfstack.push) that
+# hits the Go runtime when the amd64 compiler is emulated on an arm64 host.
+FROM --platform=$BUILDPLATFORM golang:1.22 AS build
 
 WORKDIR /src
 
@@ -14,8 +17,12 @@ RUN go mod download
 COPY . .
 
 # VERSION is injected at build time and baked into the binary via -ldflags.
+# TARGETOS/TARGETARCH are provided automatically by BuildKit/Buildah from the
+# --platform flag, so the binary targets the requested platform.
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux go build \
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/rumbles .
 
